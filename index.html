@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Domke.com - Convertidor a PNG</title>
+    <style>
+        :root {
+            --bg-color: #1e1e2e;
+            --text-color: #cdd6f4;
+            --primary: #cba6f7;
+            --success: #a6e3a1;
+            --surface: #313244;
+            --accent: #fab387;
+        }
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        header { margin-bottom: 30px; text-align: center; }
+        header h1 { color: var(--primary); font-size: 3rem; margin: 0; }
+        header p { color: var(--accent); font-style: italic; }
+
+        .container {
+            background-color: var(--surface);
+            padding: 40px;
+            border-radius: 20px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.4);
+            max-width: 800px;
+            width: 100%;
+            text-align: center;
+            border: 2px dashed #45475a;
+            transition: border 0.3s;
+        }
+        .container.dragover { border-color: var(--primary); background: #3c3e52; }
+
+        #file-input { display: none; }
+        .upload-label {
+            background-color: var(--primary);
+            color: var(--bg-color);
+            padding: 15px 30px;
+            border-radius: 10px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 1.1rem;
+            display: inline-block;
+            margin-bottom: 20px;
+        }
+
+        #preview-area {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: 20px;
+            margin-top: 30px;
+        }
+        .img-card {
+            background: rgba(0,0,0,0.2);
+            padding: 10px;
+            border-radius: 10px;
+            position: relative;
+        }
+        .img-card img {
+            max-width: 100%;
+            border-radius: 5px;
+            height: 100px;
+            object-fit: cover;
+        }
+        .img-card p {
+            font-size: 11px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            margin: 5px 0;
+        }
+        .download-btn {
+            background: var(--success);
+            color: var(--bg-color);
+            border: none;
+            padding: 5px 10px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+            width: 100%;
+        }
+        .clear-btn {
+            background: #f38ba8;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            margin-top: 20px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>Domke.com</h1>
+        <p>Transforma cualquier imagen a PNG en segundos</p>
+    </header>
+
+    <div class="container" id="drop-zone">
+        <p>Arrastra tus imágenes aquí o</p>
+        <label for="file-input" class="upload-label">Seleccionar archivos</label>
+        <input type="file" id="file-input" accept="image/*" multiple>
+        <p style="font-size: 0.8rem; color: #6c7086;">Soporta JPG, WEBP, AVIF, BMP, GIF...</p>
+    </div>
+
+    <div id="preview-area"></div>
+    
+    <button id="clear-all" class="clear-btn hidden">Limpiar todo</button>
+
+    <canvas id="conversion-canvas" style="display:none;"></canvas>
+
+    <script>
+        const fileInput = document.getElementById('file-input');
+        const dropZone = document.getElementById('drop-zone');
+        const previewArea = document.getElementById('preview-area');
+        const clearBtn = document.getElementById('clear-all');
+        const canvas = document.getElementById('conversion-canvas');
+        const ctx = canvas.getContext('2d');
+
+        // Eventos para arrastrar y soltar
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            dropZone.addEventListener(eventName, preventDefaults, false);
+        });
+
+        function preventDefaults(e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+
+        ['dragenter', 'dragover'].forEach(eventName => {
+            dropZone.addEventListener(eventName, () => dropZone.classList.add('dragover'), false);
+        });
+
+        ['dragleave', 'drop'].forEach(eventName => {
+            dropZone.addEventListener(eventName, () => dropZone.classList.remove('dragover'), false);
+        });
+
+        dropZone.addEventListener('drop', (e) => {
+            handleFiles(e.dataTransfer.files);
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            handleFiles(e.target.files);
+        });
+
+        function handleFiles(files) {
+            const fileList = Array.from(files);
+            if (fileList.length > 0) clearBtn.classList.remove('hidden');
+            
+            fileList.forEach(file => {
+                if (!file.type.startsWith('image/')) return;
+                processImage(file);
+            });
+        }
+
+        function processImage(file) {
+            const reader = new FileReader();
+            reader.readAsDataURL(file);
+            
+            reader.onload = (event) => {
+                const img = new Image();
+                img.src = event.target.result;
+                
+                img.onload = () => {
+                    // Configurar canvas con el tamaño real de la imagen
+                    canvas.width = img.width;
+                    canvas.height = img.height;
+                    
+                    // Dibujar imagen en el canvas
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    ctx.drawImage(img, 0, 0);
+                    
+                    // Convertir a PNG (DataURL)
+                    const pngData = canvas.toDataURL('image/png');
+                    
+                    // Crear la tarjeta de previsualización
+                    createPreviewCard(file.name, pngData);
+                };
+            };
+        }
+
+        function createPreviewCard(originalName, pngData) {
+            const card = document.createElement('div');
+            card.className = 'img-card';
+            
+            const newName = originalName.split('.')[0] + '.png';
+            
+            card.innerHTML = `
+                <img src="${pngData}">
+                <p title="${newName}">${newName}</p>
+                <button class="download-btn" onclick="downloadImage('${pngData}', '${newName}')">Descargar</button>
+            `;
+            
+            previewArea.appendChild(card);
+        }
+
+        function downloadImage(data, name) {
+            const link = document.createElement('a');
+            link.href = data;
+            link.download = name;
+            link.click();
+        }
+
+        clearBtn.addEventListener('click', () => {
+            previewArea.innerHTML = '';
+            clearBtn.classList.add('hidden');
+            fileInput.value = '';
+        });
+    </script>
+</body>
+</html>
